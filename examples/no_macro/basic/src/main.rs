@@ -27,7 +27,7 @@ impl IntoStateMachine for Blinky {
     /// The event type that will be submitted to the state machine.
     type Event<'evt> = Event;
 
-    type Context<'ctx> = ();
+    type Context<'ctx> = i64;
 
     /// The initial state of the state machine.
     fn initial() -> Self::State {
@@ -35,16 +35,23 @@ impl IntoStateMachine for Blinky {
     }
 
     /// This method is called on every transition of the state machine.
-    fn after_transition(&mut self, source: &Self::State, target: &Self::State) {
-        println!("transitioned from {source:?} to {target:?}");
+    fn after_transition(&mut self, source: &Self::State, target: &Self::State, context: &mut i64) {
+        println!("transitioned from {source:?} to {target:?} with context {context:#?}");
     }
 }
 
 impl blocking::State<Blinky> for State {
-    fn call_handler(&mut self, blinky: &mut Blinky, event: &Event, _: &mut ()) -> Response<Self> {
+    fn call_handler(&mut self, blinky: &mut Blinky, event: &Event, _: &mut i64) -> Response<Self> {
         match self {
             State::On => blinky.on(event),
             State::Off => blinky.off(event),
+        }
+    }
+
+    fn call_entry_action(&mut self, shared_storage: &mut Blinky, context: &mut <Blinky as IntoStateMachine>::Context<'_>) {
+        match self {
+            State::On => shared_storage.entry_on(context),
+            State::Off => {}
         }
     }
 }
@@ -61,10 +68,16 @@ impl Blinky {
         // Transition to the `on` state.
         Transition(State::On)
     }
+
+    fn entry_on(&mut self, context: &mut <Blinky as IntoStateMachine>::Context<'_>) {
+        // This method is called when entering the state.
+        println!("Entering state {context}");
+    }
 }
 
 fn main() {
-    let mut state_machine = Blinky::default().uninitialized_state_machine().init();
+    let mut ctx= 3i64;
 
-    state_machine.handle(&Event);
+    let mut state_machine = Blinky::default().uninitialized_state_machine().init_with_context(&mut ctx);
+    state_machine.handle_with_context(&Event, &mut ctx);
 }
